@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>螺絲起飛：淨零聖杯傳說 (ISO 14064-1 RPG)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        /* --- 復古 RPG 風格 UI --- */
+        :root {
+            --pixel-bg: #2d3748;
+            --pixel-border: #4a5568;
+            --pixel-accent: #48bb78; /* 綠色代表永續 */
+            --pixel-text: #e2e8f0;
+        }
+
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #1a202c;
+            color: var(--pixel-text);
+            overflow-x: hidden;
+            background-image: radial-gradient(#2d3748 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        /* 像素字體用於標題和數據 */
+        .pixel-font {
+            font-family: 'DotGothic16', sans-serif;
+        }
+
+        /* RPG 對話框風格 */
+        .rpg-box {
+            background-color: rgba(23, 42, 69, 0.95);
+            border: 4px solid #cbd5e0;
+            box-shadow: 0 0 0 4px #2d3748, 0 0 20px rgba(0,0,0,0.5);
+            border-radius: 4px;
+            position: relative;
+        }
+
+        .rpg-box::after {
+            content: '';
+            position: absolute;
+            top: -4px; left: -4px; right: -4px; bottom: -4px;
+            border: 2px solid #a0aec0;
+            pointer-events: none;
+            border-radius: 6px;
+        }
+
+        /* 按鈕樣式 */
+        .rpg-btn {
+            background: linear-gradient(180deg, #4299e1 0%, #2b6cb0 100%);
+            border: 2px solid #bee3f8;
+            color: white;
+            padding: 10px 20px;
+            font-family: 'DotGothic16', sans-serif;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: transform 0.1s;
+            text-shadow: 1px 1px 0 #000;
+            box-shadow: 0 4px 0 #2c5282;
+            width: 100%;
+            text-align: left;
+            margin-bottom: 0.75rem;
+        }
+
+        .rpg-btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 0 0 #2c5282;
+        }
+
+        .rpg-btn:hover {
+            background: linear-gradient(180deg, #63b3ed 0%, #3182ce 100%);
+        }
+
+        /* 狀態條 */
+        .status-bar {
+            height: 12px;
+            background: #4a5568;
+            border: 2px solid #cbd5e0;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .status-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #48bb78, #38a169);
+            width: 0%;
+            transition: width 0.5s ease;
+        }
+
+        /* 圖片容器 */
+        .scene-image {
+            width: 100%;
+            height: 300px;
+            object-fit: cover;
+            border: 4px solid #cbd5e0;
+            background-color: #000;
+            image-rendering: pixelated; /* 嘗試讓圖片看起來有點復古 */
+        }
+
+        /* 打字機效果光標 */
+        .cursor::after {
+            content: '▋';
+            animation: blink 1s infinite;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .term-highlight {
+            color: #f6ad55;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-2 sm:p-4">
+
+    <!-- 主遊戲容器 -->
+    <div class="w-full max-w-4xl mx-auto">
+        
+        <!-- 頂部狀態列 -->
+        <div class="rpg-box p-4 mb-4 flex justify-between items-center bg-gray-900">
+            <div class="flex items-center gap-4">
+                <div class="pixel-font text-xl text-yellow-400">LV. <span id="player-lvl">1</span> 菜鳥盤查員</div>
+                <div class="hidden sm:block text-gray-400">|</div>
+                <div class="text-sm">任務進度：<span id="quest-name" class="text-green-400">序章：碳稅危機</span></div>
+            </div>
+            <div class="w-1/3">
+                <div class="text-xs mb-1 text-right">淨零聖杯能量</div>
+                <div class="status-bar">
+                    <div id="progress-fill" class="status-fill"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 遊戲主畫面區域 -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            
+            <!-- 左側：視覺場景 -->
+            <div class="lg:col-span-2">
+                <div class="rpg-box p-2 relative">
+                    <!-- 載入動畫 -->
+                    <div id="img-loader" class="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 z-10 hidden">
+                        <div class="pixel-font text-2xl animate-pulse text-green-400">正在生成場景...</div>
+                        <div class="text-sm text-gray-500 mt-2">召喚像素繪圖精靈中</div>
+                    </div>
+                    
+                    <img id="scene-img" src="https://placehold.co/800x450/2d3748/e2e8f0?text=Screw+Lift-Off+Industries" alt="Game Scene" class="scene-image">
+                    
+                    <!-- 浮動提示文字 (例如獲得道具) -->
+                    <div id="notification-area" class="absolute bottom-4 left-0 right-0 text-center pointer-events-none"></div>
+                </div>
+            </div>
+
+            <!-- 右側：數據與NPC資訊 -->
+            <div class="lg:col-span-1 flex flex-col gap-4">
+                <!-- NPC 頭像區 -->
+                <div class="rpg-box p-4 flex-1 flex flex-col items-center justify-center text-center bg-gray-800">
+                    <div class="w-24 h-24 bg-gray-700 rounded-full border-4 border-yellow-600 mb-2 overflow-hidden flex items-center justify-center">
+                        <span id="npc-avatar" class="text-4xl">👷</span>
+                    </div>
+                    <h3 id="npc-name" class="pixel-font text-xl text-yellow-500 font-bold">阿土伯 (廠長)</h3>
+                    <p id="npc-role" class="text-xs text-gray-400">螺絲起飛實業 - 資深老將</p>
+                    <div class="mt-4 w-full bg-gray-900 p-2 rounded text-xs text-left font-mono text-green-300">
+                        > 狀態: <span id="factory-status">焦慮中</span><br>
+                        > 訂單: <span class="text-red-400">危險</span><br>
+                        > 碳排: 未知
+                    </div>
+                </div>
+
+                <!-- 道具/筆記區 -->
+                <div class="rpg-box p-4 h-48 overflow-y-auto">
+                    <h4 class="pixel-font text-lg text-blue-300 border-b border-gray-600 mb-2">📜 盤查筆記</h4>
+                    <ul id="inventory-list" class="text-sm space-y-1 list-disc pl-4 text-gray-300">
+                        <li class="italic text-gray-500">暫無筆記...</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- 底部：對話與選項 -->
+        <div class="mt-4 rpg-box p-6 min-h-[200px]">
+            <div id="dialogue-box" class="mb-6 text-lg leading-relaxed cursor">
+                <!-- 對話文字將在此打字顯示 -->
+            </div>
+            
+            <div id="choices-container" class="grid grid-cols-1 sm:grid-cols-2 gap-4 fade-in hidden">
+                <!-- 按鈕將透過 JS 生成 -->
+            </div>
+            
+            <button id="next-btn" class="hidden absolute bottom-4 right-4 bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded border border-gray-500 pixel-font animate-bounce" onclick="gameState.next()">
+                繼續 ▼
+            </button>
+        </div>
+
+    </div>
+
+    <script>
+        // --- 遊戲資料與腳本 ---
+        
+        // 圖片生成提示詞 (Pixel Art 風格)
+        const prompts = {
+            intro: "Pixel art style, wide shot of a traditional Taiwanese metal factory 'Screw Lift-off Industries' at sunset, industrial pipes, gloomy atmosphere, menacing dark clouds shaped like a dragon in the sky representing 'Carbon Tax', retro game aesthetic.",
+            office: "Pixel art style, inside a messy factory manager office in Taiwan, old wooden desk, piles of paperwork, an old fan, a calendar on the wall, an anxious middle-aged Asian factory manager wearing a helmet looking at a paper, retro game aesthetic.",
+            boundary: "Pixel art style, a factory map layout on a table, highlighting the main factory building with a glowing green magical shield (boundary), a dormitory building outside the shield, isometric view, retro game aesthetic.",
+            monsters: "Pixel art style, inside a dark factory floor, spooky glowing red eyes on machinery (forklifts, air conditioners, electrical boxes) representing 'Carbon Monsters', adventurous atmosphere, retro game aesthetic.",
+            calculation: "Pixel art style, a close up of a magical calculator glowing with blue light, a spellbook titled 'ISO 14064', mathematical symbols floating in the air, retro game aesthetic.",
+            boss: "Pixel art style, a giant monster made of black smoke and invoices labeled 'CBAM' and 'Carbon Tax', facing a small brave worker holding a glowing green shield and sword, epic battle scene, retro game aesthetic.",
+            victory: "Pixel art style, the factory is clean and bright, solar panels on the roof, blue sky, workers cheering, a golden trophy labeled 'Net Zero' shining, happy ending, retro game aesthetic."
+        };
+
+        const script = {
+            0: {
+                id: 0,
+                type: 'story',
+                text: "【世界觀序章】\n\n西元 2024 年，螺絲大陸（台灣高雄）的天空被一層灰色的陰霾籠罩。\n\n那不是霧霾，那是來自遙遠歐盟的詛咒——「CBAM 碳邊境稅」。傳說中，任何無法證明自己「清白（低碳）」的工廠，訂單都會被凍結，最終走向倒閉的命運...\n\n你是「螺絲起飛實業」剛報到的永續管理師，你的任務是拯救這間岌岌可危的老牌工廠。",
+                imgKey: 'intro',
+                npc: { name: "旁白", avatar: "📢" },
+                next: 1
+            },
+            1: {
+                id: 1,
+                type: 'dialogue',
+                text: "廠長阿土伯滿頭大汗地跑過來，手裡揮舞著一張全英文的單子。\n\n阿土伯：「夭壽喔！少年耶！客戶那邊寄這張單子來，說什麼我們要『盤查』？還要算什麼『碳』？不然下季不給單了！我們是做螺絲的，又不是賣木炭的，是要盤什麼？」",
+                imgKey: 'office',
+                npc: { name: "阿土伯", avatar: "👷", role: "焦慮的廠長" },
+                next: 2
+            },
+            2: {
+                id: 2,
+                type: 'choice',
+                text: "你看著驚慌失措的廠長，決定展現你的專業（ISO 14064-1）。首先，你需要向他解釋我們現在要做什麼任務。",
+                npc: { name: "你", avatar: "🧑‍💼", role: "永續勇者" },
+                choices: [
+                    { text: "A. 廠長別怕！我們要進行「溫室氣體盤查」，這就像幫工廠做一次全身健康檢查！", target: 3, score: 10 },
+                    { text: "B. 這是歐盟的陰謀啦，我們不要理他，繼續做我們的螺絲。", target: 99, score: -10 }
+                ]
+            },
+            3: {
+                id: 3,
+                type: 'story',
+                text: "阿土伯似懂非懂地點點頭：「健康檢查？這我就懂了。那醫生...喔不，顧問，我們要先檢查哪裡？」\n\n【任務一：畫出魔法結界 (設定組織邊界)】\n\n根據 ISO 14064-1，我們必須先確認盤查的範圍。這就像在戰場上畫出防護罩，圈在裡面的才算我們的責任。",
+                imgKey: 'boundary',
+                npc: { name: "系統提示", avatar: "🤖" },
+                next: 4
+            },
+            4: {
+                id: 4,
+                type: 'choice',
+                text: "阿土伯拿出了工廠的地圖：「少年耶，這些都是我們的地盤。你看這圈圈要怎麼畫？」\n\n(提示：我們採用「營運控制權法」，我們有權力管轄的地方才算)",
+                npc: { name: "阿土伯", avatar: "👷" },
+                choices: [
+                    { text: "A. 畫大一點！連隔壁跟我們老闆借錢的『阿美早餐店』都算進來！", target: 5, score: -5 },
+                    { text: "B. 專注本業！包含「總廠產線」與我們租用的「外包倉庫」。(員工宿舍因無管理權排除)", target: 6, score: 20 }
+                ]
+            },
+            5: {
+                id: 5,
+                type: 'dialogue',
+                text: "阿土伯：「阿美姨會拿菜刀追殺我們吧！她煎蛋的瓦斯費干我們什麼事？」\n\n(錯誤！盤查邊界應以我們擁有「營運控制權」的設施為主。)",
+                npc: { name: "阿土伯", avatar: "👷" },
+                next: 4 // 重來
+            },
+            6: {
+                id: 6,
+                type: 'story',
+                text: "【任務完成：邊界已設定！】\n\n你成功在總廠與倉庫周圍拉起了綠色的魔法結界。接下來，我們要進入結界內部，尋找躲藏的「碳怪獸」。\n\n【任務二：鑑別排放源】\nISO 14064-1 將怪物分為不同類別（範疇）。我們要找出它們並貼上封條。",
+                imgKey: 'monsters',
+                inventory: "獲得道具：組織邊界地圖",
+                npc: { name: "系統提示", avatar: "🤖" },
+                next: 7
+            },
+            7: {
+                id: 7,
+                type: 'choice',
+                text: "你走到廠房後方，發現一隻巨大的鐵龍正在吞吐黑煙（鍋爐），還有一群隱形的電光鬼（外購電力）。\n\n阿土伯問：「這些怪獸要怎麼分類啊？我看它們都長得很像...」",
+                npc: { name: "阿土伯", avatar: "👷" },
+                choices: [
+                    { text: "A. 全部混在一起做撒尿牛丸...我是說，全部算成一種碳排就好。", target: 8, score: -5 },
+                    { text: "B. 分類封印！鍋爐、公務車是「類別 1 (直接排放)」，台電的電費單是「類別 2 (能源間接排放)」。", target: 9, score: 20 }
+                ]
+            },
+            8: {
+                id: 8,
+                type: 'dialogue',
+                text: "阿土伯：「這樣不行啦！到時候查帳的法師（查證員）來，我們会被當掉！」\n\n(錯誤！ISO 14064-1 要求區分直接排放與間接排放，這是最基本的分類。)",
+                npc: { name: "阿土伯", avatar: "👷" },
+                next: 7 // 重來
+            },
+            9: {
+                id: 9,
+                type: 'story',
+                text: "【任務完成：怪獸圖鑑已更新！】\n\n你準確地辨識出了：\n1. 直接排放龍 (Scope 1)：工廠鍋爐、堆高機柴油、冷氣冷媒(逸散)。\n2. 間接電力鬼 (Scope 2)：外購電力。\n3. 其他跟屁蟲 (Scope 3)：委外運輸車隊、員工通勤。\n\n現在，我們要進行最後的決戰：【量化計算】。",
+                imgKey: 'calculation',
+                inventory: "獲得道具：排放源清單",
+                npc: { name: "系統提示", avatar: "🤖" },
+                next: 10
+            },
+            10: {
+                id: 10,
+                type: 'choice',
+                text: "面對抓到的怪獸，你需要計算它們的戰鬥力（碳排放量）。\n你手上有一把「活動數據劍」(例如：用了1000公升柴油)，你需要搭配什麼才能算出碳排量？",
+                npc: { name: "最後試煉", avatar: "⚔️" },
+                choices: [
+                    { text: "A. 搭配「排放係數魔法書」(Emission Factor)。公式：活動數據 × 排放係數 × GWP值。", target: 12, score: 30 },
+                    { text: "B. 搭配「老闆的直覺」。老闆覺得排多少就是多少。", target: 11, score: -10 }
+                ]
+            },
+            11: {
+                id: 11,
+                type: 'dialogue',
+                text: "阿土伯：「少年耶，雖然我很想說我是神，但歐盟不信這一套啦！」\n\n(錯誤！計算必須有憑有據，需要依據公告的排放係數來計算。)",
+                npc: { name: "阿土伯", avatar: "👷" },
+                next: 10 // 重來
+            },
+            12: {
+                id: 12,
+                type: 'story',
+                text: "【最終戰役：擊退碳稅魔王】\n\n你高舉著「盤查報告書（聖杯）」，報告書上詳細列出了螺絲起飛實業的碳足跡。\n\n空中的碳稅魔王發出怒吼，但看到你們精確的數據和未來的減碳計畫（換LED燈、裝太陽能），魔王的力量減弱了！\n\n阿土伯大喊：「就是現在！送出這份報告！」",
+                imgKey: 'boss',
+                inventory: "獲得道具：ISO 14064-1 盤查報告書",
+                npc: { name: "劇情高潮", avatar: "🔥" },
+                next: 13
+            },
+            13: {
+                id: 13,
+                type: 'story',
+                text: "【通關結局：螺絲起飛】\n\n魔王消散了，歐盟的訂單如雪片般飛來。\n\n阿土伯拍著你的肩膀：「好樣的！我們不只是做螺絲，我們現在是『綠色螺絲』了！」\n\n雖然這只是第一步（盤查），但你們已經掌握了通往淨零未來的鑰匙。冒險還在繼續，但今天，你們是英雄。",
+                imgKey: 'victory',
+                inventory: "獲得稱號：ESG 永續大師",
+                npc: { name: "阿土伯", avatar: "😄" },
+                next: null // End
+            },
+            99: { // Game Over logic
+                id: 99,
+                type: 'dialogue',
+                text: "三個月後，因為交不出碳盤查報告，歐盟客戶轉單給隔壁有做的工廠。螺絲起飛實業... 倒閉了。\n\n(請按重新整理再來一次)",
+                imgKey: 'boss',
+                npc: { name: "悲慘結局", avatar: "💀" },
+                next: null
+            }
+        };
+
+        // --- 遊戲引擎邏輯 ---
+        
+        const gameState = {
+            currentStage: 0,
+            score: 0,
+            inventory: [],
+            
+            init: function() {
+                this.renderStage(0);
+                this.updateStatus();
+            },
+
+            next: function() {
+                const stage = script[this.currentStage];
+                if (stage.next !== null) {
+                    this.currentStage = stage.next;
+                    this.renderStage(this.currentStage);
+                }
+            },
+
+            choose: function(targetId, scoreChange) {
+                this.score += scoreChange;
+                this.currentStage = targetId;
+                this.updateStatus();
+                this.renderStage(this.currentStage);
+            },
+
+            updateStatus: function() {
+                // 更新等級與分數條
+                const lvl = Math.floor(this.score / 20) + 1;
+                document.getElementById('player-lvl').innerText = lvl;
+                
+                // 簡單的進度條邏輯
+                const progress = Math.min(100, Math.max(0, (this.currentStage / 13) * 100));
+                document.getElementById('progress-fill').style.width = `${progress}%`;
+                
+                // 更新背包
+                const list = document.getElementById('inventory-list');
+                if (this.inventory.length > 0) {
+                    list.innerHTML = this.inventory.map(item => `<li class="text-green-300 animate-pulse">✨ ${item}</li>`).join('');
+                }
+            },
+
+            renderStage: async function(stageId) {
+                const data = script[stageId];
+                
+                // 1. 更新 NPC 資訊
+                if (data.npc) {
+                    document.getElementById('npc-name').innerText = data.npc.name;
+                    document.getElementById('npc-avatar').innerText = data.npc.avatar;
+                    if(data.npc.role) document.getElementById('npc-role').innerText = data.npc.role;
+                }
+
+                // 2. 更新圖片 (呼叫生成函數)
+                if (data.imgKey) {
+                    this.generateImage(data.imgKey);
+                }
+
+                // 3. 更新背包 (如果有)
+                if (data.inventory && !this.inventory.includes(data.inventory)) {
+                    this.inventory.push(data.inventory);
+                    this.updateStatus();
+                    // 顯示浮動通知
+                    const notify = document.getElementById('notification-area');
+                    notify.innerHTML = `<span class="bg-black bg-opacity-70 text-yellow-300 px-4 py-1 rounded pixel-font border border-yellow-500">${data.inventory}</span>`;
+                    setTimeout(() => notify.innerHTML = '', 3000);
+                }
+
+                // 4. 文字打字機效果
+                const dialogueBox = document.getElementById('dialogue-box');
+                const nextBtn = document.getElementById('next-btn');
+                const choicesContainer = document.getElementById('choices-container');
+                
+                dialogueBox.innerHTML = '';
+                nextBtn.classList.add('hidden');
+                choicesContainer.classList.add('hidden');
+                choicesContainer.innerHTML = ''; // 清空選項
+
+                let i = 0;
+                const speed = 30; // 打字速度
+                
+                function typeWriter() {
+                    if (i < data.text.length) {
+                        // 處理換行
+                        if(data.text.charAt(i) === '\n') {
+                            dialogueBox.innerHTML += '<br>';
+                        } else {
+                            dialogueBox.innerHTML += data.text.charAt(i);
+                        }
+                        i++;
+                        setTimeout(typeWriter, speed);
+                    } else {
+                        // 打字完成
+                        if (data.type === 'choice') {
+                            choicesContainer.classList.remove('hidden');
+                            data.choices.forEach(choice => {
+                                const btn = document.createElement('button');
+                                btn.className = 'rpg-btn';
+                                btn.innerText = choice.text;
+                                btn.onclick = () => gameState.choose(choice.target, choice.score);
+                                choicesContainer.appendChild(btn);
+                            });
+                        } else if (data.next !== null) {
+                            nextBtn.classList.remove('hidden');
+                        }
+                    }
+                }
+                typeWriter();
+            },
+
+            generateImage: async function(key) {
+                const loader = document.getElementById('img-loader');
+                const img = document.getElementById('scene-img');
+                
+                // 簡單的快取避免重複生成 (在真實 API 中很重要)
+                if (img.dataset.currentKey === key) return;
+                
+                loader.classList.remove('hidden');
+                
+                const prompt = prompts[key];
+                
+                try {
+                    // 使用 Gemini API 或 Imagen 進行生成的模擬邏輯
+                    // 這裡整合了您提供的 Workflow 中的 Image Generation 邏輯
+                    const apiKey = ""; // 系統會自動填入
+                    // 注意：實際環境中如果沒有 key，這段會失敗，所以我增加了 fallback 邏輯
+                    
+                    const response = await fetch(
+                        `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`,
+                        {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                instances: [{ prompt: prompt }],
+                                parameters: { sampleCount: 1 },
+                            }),
+                        }
+                    );
+
+                    if (!response.ok) {
+                        throw new Error("Image gen failed");
+                    }
+
+                    const result = await response.json();
+                    const base64Image = result.predictions[0].bytesBase64Encoded;
+                    img.src = `data:image/png;base64,${base64Image}`;
+                    img.dataset.currentKey = key;
+
+                } catch (error) {
+                    console.log("Image generation fallback or error:", error);
+                    // 失敗時使用 Placehold.co 顯示對應的文字圖片
+                    img.src = `https://placehold.co/800x450/2d3748/e2e8f0?text=${key.toUpperCase()}+SCENE&font=roboto`;
+                } finally {
+                    loader.classList.add('hidden');
+                }
+            }
+        };
+
+        // 啟動遊戲
+        window.onload = function() {
+            gameState.init();
+        };
+
+    </script>
+</body>
+</html>
